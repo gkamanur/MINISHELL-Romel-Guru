@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+
 #include "../includes/minishell.h"
 
 // Helper to convert env_list to char ** for execve
@@ -24,7 +25,7 @@ char **env_list_to_array(t_env *env_list)
         current = current->next;
     }
 
-    char **envp = Malloc(sizeof(char *) * (count + 1), "env_array");
+    char **envp = malloc(sizeof(char *) * (count + 1));
     if (!envp)
         return NULL;
 
@@ -34,9 +35,7 @@ char **env_list_to_array(t_env *env_list)
     {
         if (current->key && current->value)
         {
-            size_t key_len = ft_strlen(current->key);
-            size_t val_len = ft_strlen(current->value);
-            envp[i] = Malloc(key_len + val_len + 2, "env_entry");
+            envp[i] = malloc(strlen(current->key) + strlen(current->value) + 2);
             sprintf(envp[i], "%s=%s", current->key, current->value);
             i++;
         }
@@ -45,6 +44,9 @@ char **env_list_to_array(t_env *env_list)
     envp[i] = NULL;
     return envp;
 }
+
+// Helper to free envp array
+
 
 // Helper to convert tokens to char ** for execve
 char **tokens_to_array(t_tokens *tokens)
@@ -57,7 +59,7 @@ char **tokens_to_array(t_tokens *tokens)
         current = current->next;
     }
 
-    char **args = Malloc(sizeof(char *) * (count + 1), "args_array");
+    char **args = malloc(sizeof(char *) * (count + 1));
     if (!args)
         return NULL;
 
@@ -65,7 +67,7 @@ char **tokens_to_array(t_tokens *tokens)
     int i = 0;
     while (current)
     {
-        args[i] = ft_strdup(current->token, "args_token"); // Create copy instead of direct reference
+        args[i] = current->token; // Assume token is already allocated
         i++;
         current = current->next;
     }
@@ -87,10 +89,10 @@ char** split_paths(char* paths, int* count) {
     char** result = NULL;
     char* token;
     size_t size_of_path = ft_strlen(paths);
-    char *paths_copy = Malloc(size_of_path + 1, "paths_copy");
+    char paths_copy[size_of_path];
 
-    ft_strncpy(paths_copy, paths, size_of_path);
-    paths_copy[size_of_path] = '\0';
+    ft_strncpy(paths_copy, paths, sizeof(paths_copy));
+    paths_copy[sizeof(paths_copy) - 1] = '\0';
 
     token = ft_strtok(paths_copy, ":");
     *count = 0;
@@ -100,11 +102,6 @@ char** split_paths(char* paths, int* count) {
         result[*count] = ft_strdup(token, "split_paths_strdup");
         if (!result[*count]) {
             perror("ft_strdup");
-            // Clean up on failure
-            for (int j = 0; j < *count; j++)
-                Free(result[j], "cleanup_split_paths");
-            Free(result, "cleanup_split_paths");
-            Free(paths_copy, "cleanup_paths_copy");
             return NULL;
         }
 
@@ -112,7 +109,6 @@ char** split_paths(char* paths, int* count) {
         token = ft_strtok(NULL, ":");
     }
 
-    Free(paths_copy, "paths_copy");
     return result;
 }
 
@@ -120,82 +116,44 @@ char** split_paths(char* paths, int* count) {
 int child_process(char** args, char** env) 
 {
     char* path_string = get_path(env);
-    if (!path_string)
-    {
-        // Try executing in current directory
-        if (execve(args[0], args, env) == -1)
-        {
-            perror("execve");
-            free_argv(args, "free_args_child_no_path");
-            exit(127);
-        }
-    }
-    
     int num_paths;
     char** path_list = split_paths(path_string, &num_paths);
-    
-    if (!path_list)
-    {
-        Free(path_string, "path_string");
-        if (execve(args[0], args, env) == -1)
-        {
-            perror("execve");
-            free_argv(args, "free_args_child_no_paths");
-            exit(127);
-        }
-    }
 
-    // Try each path
+    // access() execve()
     for (int i = 0; i < num_paths; i++) {
-        char *full_path = Malloc(ft_strlen(path_list[i]) + ft_strlen(args[0]) + 2, "full_path");
-        sprintf(full_path, "%s/%s", path_list[i], args[0]);
+        char full_path[MAX_INPUT];
+        snprintf(full_path, sizeof(full_path), "%s/%s", path_list[i], args[0]);
 
         if (access(full_path, X_OK) == 0) {
             if (execve(full_path, args, env) == -1)
             {
-                perror("execve");
-                Free(full_path, "full_path");
-                // Clean up before exit
-                for (int j = 0; j < num_paths; j++)
-                    Free(path_list[j], "path_cleanup");
-                Free(path_list, "path_list_cleanup");
-                Free(path_string, "path_string_cleanup");
-                free_argv(args, "free_args_child1");
-                exit(127);
-            }
+    	        perror("execve");
+    	        free_argv(args,"free_args_child1");  // ← avoid leak
+	        }
         }
-        Free(full_path, "full_path");
     }
 
-    // Clean up path resources
-    for (int i = 0; i < num_paths; i++)
-        Free(path_list[i], "path_cleanup");
-    Free(path_list, "path_list_cleanup");
-    Free(path_string, "path_string_cleanup");
+    for (int i = 0; path_list[i]; i++)
+        free(path_list[i]);
+    free(path_string);
+    free(path_list);
 
     // Try executing the command in the current working directory
-    char* cwd = getcwd(NULL, 0);
+    char* cwd = NULL;
+    cwd = getcwd(NULL, 0);
     if(cwd == NULL) {
         perror("getcwd");
-        free_argv(args, "free_args_child_getcwd_fail");
-        exit(1);
+        return 1;
     }
 
-    char *full_cwd_path = Malloc(ft_strlen(cwd) + ft_strlen(args[0]) + 2, "full_cwd_path");
-    sprintf(full_cwd_path, "%s/%s", cwd, args[0]);
-    
+    char full_cwd_path[MAX_INPUT];
+    snprintf(full_cwd_path, sizeof(full_cwd_path), "%s/%s", cwd, args[0]);
+    //execve(full_cwd_path, args, env);
     if (execve(full_cwd_path, args, env) == -1) 
-    {
-        perror("execve");
-        Free(full_cwd_path, "full_cwd_path");
-        free(cwd);
-        free_argv(args, "free_args_child2");
-        exit(127);
-    }
-    
-    // This should never be reached
-    Free(full_cwd_path, "full_cwd_path");
-    free(cwd);
+	{
+    	perror("execve");
+    	free_argv(args, "free_args_child2");  // ← avoid leak
+	}	
     return 1;
 }
 
@@ -212,9 +170,11 @@ int executor(char** args, char** env)
 
     if (pid == 0) // child process
     { 
-        child_process(args, env);
-        // Should not reach here
-        exit(127);
+        if (child_process(args, env)) {
+            perror("execve");
+            free_argv(args, "free_args_executor");
+            return 1;
+        }
     } 
     else // Parent process
     { 
@@ -225,6 +185,13 @@ int executor(char** args, char** env)
         if (WIFSIGNALED(status)) {
             printf("Process terminated by signal: %d\n", WTERMSIG(status));
         }
-        return WEXITSTATUS(status);
+        // if (WTERMSIG(status) == SIGSEGV) {
+        //     perror("segmentation fault");
+        // }
     }
+    return 1;
 }
+
+
+
+// Fetches the PATH environment variable

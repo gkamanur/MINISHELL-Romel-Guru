@@ -82,6 +82,9 @@ void	print_args(t_tokens *args)
 	}
 }
 
+
+
+
 int main(int ac, char **av, char **envp)
 {
     char        *inp_line;
@@ -95,6 +98,9 @@ int main(int ac, char **av, char **envp)
     env_list = init_env(envp);
     init_signals();
     
+    // Load command history from file
+    // load_history_from_file();
+    
     putstr_clr("Minishell v2.0 with Persistent History\n", 1, GREEN);
     printbanner();
 
@@ -104,6 +110,7 @@ int main(int ac, char **av, char **envp)
         if (!inp_line) // Handle EOF (Ctrl+D)
         {
             printf("exit\n");
+            // save_history_to_file();
             break;
         }
         
@@ -112,6 +119,9 @@ int main(int ac, char **av, char **envp)
             Free(inp_line, "empty_inp_line");
             continue;
         }
+
+        // Add to history only if it's unique
+        // add_to_history_if_unique(inp_line);
 
         args = input_parse2(inp_line);
         if (args)
@@ -132,3 +142,4 @@ int main(int ac, char **av, char **envp)
     
     return status;
 }
+

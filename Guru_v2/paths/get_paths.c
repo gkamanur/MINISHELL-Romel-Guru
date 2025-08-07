@@ -39,9 +39,6 @@ char **gen_paths(int index, t_cmd *data, char *cmd)
     path_env = data->env[index] + 5; // Skip "PATH="
     paths = ft_split(path_env, ':');
     
-    if (!paths)
-        return NULL;
-    
     // Count paths
     while (paths[path_count])
         path_count++;
@@ -78,18 +75,16 @@ int check_exec(char **inputs, t_cmd *data)
             return 0;
             
         int i = 0;
-        int found = 0;
         while (paths[i])
         {
             if (access(paths[i], X_OK) == 0)
             {
-                found = 1;
-                break;
+                free_argv(paths, "check_exec");
+                return 1;
             }
             i++;
         }
         free_argv(paths, "check_exec");
-        return found;
     }
     
     return 0;

@@ -13,16 +13,14 @@
 #include "../includes/minishell.h"
 
 t_env *create_env_node(const char *key, const char *value) {
-    t_env *node = Malloc(sizeof(t_env), "env_node");
+    t_env *node = malloc(sizeof(t_env));
     if (!node) return NULL;
-    
-    node->key = ft_strdup(key, "env_key");
-    node->value = ft_strdup(value, "env_value");
-    
+    node->key = strdup(key);
+    node->value = strdup(value);
     if (!node->key || !node->value) {
-        Free(node->key, "env_key_cleanup");
-        Free(node->value, "env_value_cleanup");
-        Free(node, "env_node_cleanup");
+        free(node->key);
+        free(node->value);
+        free(node);
         return NULL;
     }
     node->next = NULL;
@@ -32,10 +30,9 @@ t_env *create_env_node(const char *key, const char *value) {
 t_env *init_env(char **envp) {
     t_env *env_list = NULL;
     for (int i = 0; envp[i]; i++) {
-        char *entry = ft_strdup(envp[i], "env_entry");
+        char *entry = strdup(envp[i]);
         if (!entry) continue;
-        
-        char *eq = ft_strchr(entry, '=');
+        char *eq = strchr(entry, '=');
         if (eq) {
             *eq = '\0';
             t_env *node = create_env_node(entry, eq + 1);
@@ -44,7 +41,7 @@ t_env *init_env(char **envp) {
                 env_list = node;
             }
         }
-        Free(entry, "env_entry");
+        free(entry);
     }
     return env_list;
 }
@@ -52,9 +49,11 @@ t_env *init_env(char **envp) {
 char *get_env_value(const char *key, t_env *env_list) {
     t_env *current = env_list;
     while (current) {
-        if (ft_strcmp(current->key, key) == 0)
+        if (strcmp(current->key, key) == 0)
             return current->value;
         current = current->next;
     }
     return "";
 }
+
+
